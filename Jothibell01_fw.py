@@ -189,7 +189,12 @@ def on_message(client, userdata, msg):
                 "message": f"Playing {file_name} on speaker: {speaker}"
             }))
 
-  
+    except Exception as e:
+        print(f"? Failed to process MQTT message: {e}")
+        client.publish(MQTT_TOPIC_PUBLISH, json.dumps({
+            "status": "error",
+            "message": f"Exception: {str(e)}"
+        }))
         
 def mqtt_publish_loop(client):
     while True:
@@ -523,7 +528,7 @@ def upload():
     if file and allowed_file(file.filename):
         file.save(os.path.join(UPLOAD_FOLDER, file.filename))
     return redirect(url_for('index'))
-
+    
 @app.route("/add", methods=["POST"])
 def add_schedule():
     time_val = request.form['time']
@@ -532,6 +537,7 @@ def add_schedule():
     enabled = 'enabled' in request.form
     days = request.form.getlist('days')
     date = request.form.get('date', '')
+    speaker = request.form.get('speaker', 'default')  # ✅ Get speaker
 
     schedule = load_schedule()
     schedule.append({
@@ -540,10 +546,12 @@ def add_schedule():
         'label': label,
         'enabled': enabled,
         'days': days,
-        'date': date
+        'date': date,
+        'speaker': speaker  # ✅ Save speaker in the schedule
     })
     save_schedule(schedule)
     return redirect(url_for('index'))
+
 
 @app.route("/delete/<int:index>", methods=["POST"])
 def delete_schedule(index):
