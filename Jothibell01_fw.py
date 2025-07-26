@@ -55,6 +55,16 @@ if not os.path.exists(SCHEDULE_FILE):
     with open(SCHEDULE_FILE, 'w') as f:
         json.dump([], f)
 
+def get_rpi_serial():
+    try:
+        with open('/proc/cpuinfo', 'r') as f:
+            for line in f:
+                if line.startswith('Serial'):
+                    return line.strip().split(':')[1].strip()
+    except Exception as e:
+        print(f"⚠️ Failed to read RPi serial: {e}")
+    return "0000000000000000"
+
 def on_connect(client, userdata, flags, rc):
     print(f"? MQTT Connected with result code {rc}")
     client.subscribe(MQTT_TOPIC)
@@ -197,15 +207,28 @@ def on_message(client, userdata, msg):
         }))
         
 def mqtt_publish_loop(client):
+    rpi_id = get_rpi_serial()
+
     while True:
         try:
             schedule_data = load_schedule()
-            payload =  "{\"imei\":\"schoolbell/status\",\"data\":\"123456\"}" #json.dumps(schedule_data)
-            client.publish(MQTT_TOPIC_PUBLISH, payload)
-            print(f"?? Published schedule to {MQTT_TOPIC_PUBLISH}")
+
+            # Add version if not already present
+            version = datetime.now().isoformat()
+
+            payload = {
+                "imei": rpi_id,
+                "version": version
+            }
+
+            client.publish(MQTT_TOPIC_PUBLISH, json.dumps(payload))
+            print(f"📤 Published schedule to {MQTT_TOPIC_PUBLISH} @ {version}")
+
         except Exception as e:
-            print(f"? Error publishing MQTT: {e}")
+            print(f"⚠️ Error publishing MQTT: {e}")
+
         time.sleep(10)  # Publish every 10 seconds
+
         
 def start_mqtt():
     client = mqtt.Client()
@@ -528,7 +551,7 @@ def upload():
     if file and allowed_file(file.filename):
         file.save(os.path.join(UPLOAD_FOLDER, file.filename))
     return redirect(url_for('index'))
-    
+
 @app.route("/add", methods=["POST"])
 def add_schedule():
     time_val = request.form['time']
