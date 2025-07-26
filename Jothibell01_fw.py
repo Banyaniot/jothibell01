@@ -337,6 +337,7 @@ HTML = """
       background-color: #f7f9fc;
       transition: background-color 0.3s, color 0.3s;
     }
+    
     h1 {
       background-color: #4CAF50;
       color: white;
@@ -372,6 +373,18 @@ HTML = """
     button:hover {
       background-color: #45a049;
     }
+      .days-container {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      margin-top: 5px;
+      }
+    .days-container label {
+      display: flex;
+      align-items: center;
+      font-weight: normal;
+      }
+
     .table-container {
       overflow-y: auto;
       max-height: 500px;
@@ -479,12 +492,13 @@ HTML = """
       <option value="outdoor">Outdoor</option>
     </select>
     <label>Days:</label>
-    <div style="margin-top: 10px;">
-      {% for day in ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"] %}
-        <label style="display:inline-block; margin-right: 12px;">
-          <input type="checkbox" name="days" value="{{ day }}"> {{ day[:3] }}
-        </label>
-      {% endfor %}
+    <div class="form-group">
+        <label>Days:</label>
+        <div class="days-container">
+            {% for day in ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"] %}
+                <label><input type="checkbox" name="days" value="{{ day }}"> {{ day[:3] }}</label>
+            {% endfor %}
+        </div>
     </div>
 
     <label><input type="checkbox" name="enabled" checked> Enabled</label>
