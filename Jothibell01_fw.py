@@ -34,6 +34,7 @@ import subprocess
 from gtts import gTTS
 import re
 import paho.mqtt.client as mqtt
+import requests
 
 current_process = None
 app = Flask(__name__)
@@ -66,16 +67,43 @@ def on_message(client, userdata, msg):
 
         if command == "add":
             schedule = load_schedule()
+            # Extract fields
+            time_val = data.get("time")
+            file_val = data.get("file")
+            label = data.get("label", "")
+            enabled = data.get("enabled", True)
+            days = data.get("days", [])
+            date = data.get("date", "")
+            file_url = data.get("url", "")  # 🔸 Optional download URL
+            if not time_val or not file_val:
+                raise ValueError("Missing 'time' or 'file' in add command")
+            file_path = os.path.join(UPLOAD_FOLDER, file_val)
+            # 🔽 If the file doesn't exist and a URL is provided, download it
+            if not os.path.exists(file_path):
+                if file_url:
+                    try:                     
+                        response = requests.get(file_url)
+                        response.raise_for_status()
+                        with open(file_path, 'wb') as f:
+                            f.write(response.content)
+                        print(f"📥 Downloaded file from {file_url}")
+                    except Exception as e:
+                        raise Exception(f"Failed to download file: {e}")
+                else:
+                    raise Exception(f"File '{file_val}' not found and no download URL provided")
+
+            # ✅ Add to schedule
             schedule.append({
-                "time": data.get("time"),
-                "file": data.get("file"),
-                "label": data.get("label", ""),
-                "enabled": data.get("enabled", True),
-                "days": data.get("days", []),
-                "date": data.get("date", "")
+                "time": time_val,
+                "file": file_val,
+                "label": label,
+                "enabled": enabled,
+                "days": days,
+                "date": date
             })
             save_schedule(schedule)
-            print("? Schedule added via MQTT")
+
+            print("✅ Schedule added via MQTT")
             client.publish(MQTT_TOPIC_PUBLISH, json.dumps({
                 "status": "success",
                 "command": "add",
@@ -83,49 +111,63 @@ def on_message(client, userdata, msg):
             }))
 
         elif command == "delete":
-            index = data.get("index")
+            label = data.get("label", "").strip().lower()
             schedule = load_schedule()
-            if isinstance(index, int) and 0 <= index < len(schedule):
-                removed = schedule.pop(index)
-                save_schedule(schedule)
-                print(f"??? Deleted schedule at index {index}")
-                client.publish(MQTT_TOPIC_PUBLISH, json.dumps({
-                    "status": "success",
-                    "command": "delete",
-                    "message": f"Deleted schedule at index {index}"
-                }))
-            else:
-                print("? Invalid index for delete")
-                client.publish(MQTT_TOPIC_PUBLISH, json.dumps({
-                    "status": "error",
-                    "command": "delete",
-                    "message": "Invalid index for delete"
-                }))
+            found = False
+
+            for i, item in enumerate(schedule):
+                if item.get("label", "").strip().lower() == label:
+                    removed = schedule.pop(i)
+                    save_schedule(schedule)
+                    found = True
+                    print(f"🗑️ Deleted schedule with label: {label}")
+                    client.publish(MQTT_TOPIC_PUBLISH, json.dumps({
+                        "status": "success",
+                        "command": "delete",
+                        "message": f"Deleted schedule with label: {label}"
+                    }))
+                    break
+
+            if not found:
+                  print(f"⚠️ No schedule found with label: {label}")
+                  client.publish(MQTT_TOPIC_PUBLISH, json.dumps({
+                      "status": "error",
+                      "command": "delete",
+                      "message": f"No schedule found with label: {label}"
+                  }))
 
         elif command == "play":
-            filename = data.get("file")
-            if filename:
-                print(f"?? Playing test alarm: {filename}")
-                play_audio(filename)
-                client.publish(MQTT_TOPIC_PUBLISH, json.dumps({
-                    "status": "success",
-                    "command": "play",
-                    "message": f"Playing file: {filename}"
-                }))
-            else:
-                print("? No file provided for test play")
-                client.publish(MQTT_TOPIC_PUBLISH, json.dumps({
-                    "status": "error",
-                    "command": "play",
-                    "message": "No file specified"
-                }))
-        else:
-            print("?? Unknown command received")
-            client.publish(MQTT_TOPIC_PUBLISH, json.dumps({
-                "status": "error",
-                "command": command,
-                "message": "Unknown command"
-            }))
+              file_name = data.get("file")
+              file_url = data.get("url", "")  # Optional download URL
+
+              if not file_name:
+                  raise ValueError("Missing 'file' in play command")
+
+              file_path = os.path.join(UPLOAD_FOLDER, file_name)
+
+              # 🔽 If file doesn't exist locally, try downloading
+              if not os.path.exists(file_path):
+                  if file_url:
+                      try:
+                          import requests
+                          response = requests.get(file_url)
+                          response.raise_for_status()
+                          with open(file_path, 'wb') as f:
+                              f.write(response.content)
+                          print(f"📥 Downloaded file from {file_url}")
+                      except Exception as e:
+                          raise Exception(f"Failed to download file: {e}")
+                  else:
+                      raise Exception(f"File '{file_name}' not found and no download URL provided")
+
+              # ✅ Now play the file
+              play_audio(file_path)
+
+              client.publish(MQTT_TOPIC_PUBLISH, json.dumps({
+                  "status": "success",
+                  "command": "play",
+                  "message": f"Playing {file_name}"
+              }))
 
     except Exception as e:
         print(f"? Failed to process MQTT message: {e}")
@@ -133,7 +175,7 @@ def on_message(client, userdata, msg):
             "status": "error",
             "message": f"Exception: {str(e)}"
         }))
-
+  
         
 def mqtt_publish_loop(client):
     while True:
