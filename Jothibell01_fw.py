@@ -34,7 +34,8 @@ import subprocess
 from gtts import gTTS
 import re
 import paho.mqtt.client as mqtt
-import requests
+import requests 
+
 
 current_process = None
 app = Flask(__name__)
@@ -59,7 +60,7 @@ def on_connect(client, userdata, flags, rc):
     client.subscribe(MQTT_TOPIC)
 
 def on_message(client, userdata, msg):
-    print(f"?? MQTT Message received on {msg.topic}")
+    print(f"📩 MQTT Message received on {msg.topic}")
     try:
         payload = json.loads(msg.payload.decode())
         command = payload.get("command")
@@ -67,21 +68,25 @@ def on_message(client, userdata, msg):
 
         if command == "add":
             schedule = load_schedule()
-            # Extract fields
+
             time_val = data.get("time")
             file_val = data.get("file")
             label = data.get("label", "")
             enabled = data.get("enabled", True)
             days = data.get("days", [])
             date = data.get("date", "")
-            file_url = data.get("url", "")  # 🔸 Optional download URL
+            file_url = data.get("url", "")
+            speaker = data.get("speaker", "default")  # ✅ Add speaker type
+
             if not time_val or not file_val:
                 raise ValueError("Missing 'time' or 'file' in add command")
+
             file_path = os.path.join(UPLOAD_FOLDER, file_val)
-            # 🔽 If the file doesn't exist and a URL is provided, download it
+
+            # Download the file if not exists
             if not os.path.exists(file_path):
                 if file_url:
-                    try:                     
+                    try:
                         response = requests.get(file_url)
                         response.raise_for_status()
                         with open(file_path, 'wb') as f:
@@ -92,14 +97,15 @@ def on_message(client, userdata, msg):
                 else:
                     raise Exception(f"File '{file_val}' not found and no download URL provided")
 
-            # ✅ Add to schedule
+            # Add schedule entry
             schedule.append({
                 "time": time_val,
                 "file": file_val,
                 "label": label,
                 "enabled": enabled,
                 "days": days,
-                "date": date
+                "date": date,
+                "speaker": speaker  # ✅ Save speaker in schedule
             })
             save_schedule(schedule)
 
@@ -129,52 +135,60 @@ def on_message(client, userdata, msg):
                     break
 
             if not found:
-                  print(f"⚠️ No schedule found with label: {label}")
-                  client.publish(MQTT_TOPIC_PUBLISH, json.dumps({
-                      "status": "error",
-                      "command": "delete",
-                      "message": f"No schedule found with label: {label}"
-                  }))
+                print(f"⚠️ No schedule found with label: {label}")
+                client.publish(MQTT_TOPIC_PUBLISH, json.dumps({
+                    "status": "error",
+                    "command": "delete",
+                    "message": f"No schedule found with label: {label}"
+                }))
 
         elif command == "play":
-              file_name = data.get("file")
-              file_url = data.get("url", "")  # Optional download URL
+            file_name = data.get("file")
+            file_url = data.get("url", "")
+            speaker = data.get("speaker", "default").lower()  # ✅ get speaker value
 
-              if not file_name:
-                  raise ValueError("Missing 'file' in play command")
+            if not file_name:
+                raise ValueError("Missing 'file' in play command")
 
-              file_path = os.path.join(UPLOAD_FOLDER, file_name)
+            file_path = os.path.join(UPLOAD_FOLDER, file_name)
 
-              # 🔽 If file doesn't exist locally, try downloading
-              if not os.path.exists(file_path):
-                  if file_url:
-                      try:
-                          import requests
-                          response = requests.get(file_url)
-                          response.raise_for_status()
-                          with open(file_path, 'wb') as f:
-                              f.write(response.content)
-                          print(f"📥 Downloaded file from {file_url}")
-                      except Exception as e:
-                          raise Exception(f"Failed to download file: {e}")
-                  else:
-                      raise Exception(f"File '{file_name}' not found and no download URL provided")
+            # 🔽 Download the file if it doesn't exist
+            if not os.path.exists(file_path):
+                if file_url:
+                    try:
+                        response = requests.get(file_url)
+                        response.raise_for_status()
+                        with open(file_path, 'wb') as f:
+                            f.write(response.content)
+                        print(f"📥 Downloaded file from {file_url}")
+                    except Exception as e:
+                        raise Exception(f"Failed to download file: {e}")
+                else:
+                    raise Exception(f"File '{file_name}' not found and no download URL provided")
 
-              # ✅ Now play the file
-              play_audio(file_path)
+            # 🔊 Handle speaker selection (example routing logic)
+            print(f"🔊 Playing '{file_name}' on speaker: {speaker}")
+            
+            if speaker == "indoor":
+                # Example: route to indoor amplifier or ALSA device
+                print("➡️ Routing to indoor speaker")
+                # os.system('aplay -D plughw:1,0 {}'.format(file_path))  # example
+            elif speaker == "outdoor":
+                print("➡️ Routing to outdoor speaker")
+                # os.system('aplay -D plughw:2,0 {}'.format(file_path))  # example
+            else:
+                print("➡️ Routing to default speaker")
+                # os.system('aplay {}'.format(file_path))  # example
 
-              client.publish(MQTT_TOPIC_PUBLISH, json.dumps({
-                  "status": "success",
-                  "command": "play",
-                  "message": f"Playing {file_name}"
-              }))
+            # ✅ Call your actual play logic (e.g., ALSA/gTTS/mpg123/etc.)
+            play_audio(file_path)  # ← this should already handle your playback
 
-    except Exception as e:
-        print(f"? Failed to process MQTT message: {e}")
-        client.publish(MQTT_TOPIC_PUBLISH, json.dumps({
-            "status": "error",
-            "message": f"Exception: {str(e)}"
-        }))
+            client.publish(MQTT_TOPIC_PUBLISH, json.dumps({
+                "status": "success",
+                "command": "play",
+                "message": f"Playing {file_name} on speaker: {speaker}"
+            }))
+
   
         
 def mqtt_publish_loop(client):
@@ -420,7 +434,12 @@ HTML = """
 
     <label>Label:</label>
     <input type="text" name="label" placeholder="Label (e.g., Morning Bell)">
-
+    <label>Speaker:</label>
+    <select name="speaker" required>
+      <option value="default">Default</option>
+      <option value="indoor">Indoor</option>
+      <option value="outdoor">Outdoor</option>
+    </select>
     <label>Days:</label>
     <div style="margin-top: 10px;">
       {% for day in ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"] %}
@@ -436,13 +455,14 @@ HTML = """
 
   <div class="table-container">
     <table>
-      <tr><th>Date</th><th>Time</th><th>Sound</th><th>Label</th><th>Days</th><th>Status</th><th>Actions</th></tr>
+      <tr><th>Date</th><th>Time</th><th>Sound</th><th>Label</th><th>Speaker</th><th>Days</th><th>Status</th><th>Actions</th></tr>
       {% for s in schedule %}
       <tr>
         <td>{{ s.date if s.date else "-" }}</td>
         <td>{{ s.time }}</td>
         <td>{{ s.file }}</td>
         <td>{{ s.label }}</td>
+        <td>{{ s.speaker if s.speaker else "default" }}</td>
         <td>{{ ", ".join(s.days) if s.days else "Daily" }}</td>
         <td>{{ 'Enabled' if s.enabled else 'Disabled' }}</td>
         <td class="actions">
