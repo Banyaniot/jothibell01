@@ -389,6 +389,65 @@ HTML = """
       overflow-y: auto;
       max-height: 500px;
     }
+    .toggle-container {
+      display: flex;
+      align-items: left;
+      gap: 10px;
+      margin-top: 10px;
+      margin-bottom: 10px;
+    }
+
+    .toggle-label {
+      font-weight: 500;
+      font-size: 16px;
+      margin-right: 5px;
+    }
+
+    .switch {
+      position: relative;
+      display: inline-block;
+      width: 50px;
+      height: 24px;
+    }
+
+    .switch input {
+      opacity: 0;
+      width: 0;
+      height: 0;
+    }
+
+    .slider {
+      position: absolute;
+      cursor: pointer;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background-color: #ccc;
+      transition: 0.4s;
+      border-radius: 24px;
+    }
+
+    .slider:before {
+      position: absolute;
+      content: "";
+      height: 18px;
+      width: 18px;
+      left: 3px;
+      bottom: 3px;
+      background-color: white;
+      transition: 0.4s;
+      border-radius: 50%;
+    }
+
+    input:checked + .slider {
+      background-color: #4CAF50;
+    }
+
+    input:checked + .slider:before {
+      transform: translateX(26px);
+    }
+    .toggle-state {
+      font-size: 14px;
+      color: #555;
+    }
     table {
       border-collapse: collapse;
       width: 100%;
@@ -491,17 +550,24 @@ HTML = """
       <option value="indoor">Indoor</option>
       <option value="outdoor">Outdoor</option>
     </select>
-    <label>Days:</label>
-    <div class="form-group">
-        <label>Days:</label>
-        <div class="days-container">
-            {% for day in ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"] %}
-                <label><input type="checkbox" name="days" value="{{ day }}"> {{ day[:3] }}</label>
-            {% endfor %}
-        </div>
+    <div style="display: flex; gap: 20px; white-space: nowrap; align-items: center;">
+      <label style="display: flex; align-items: center;"><input type="checkbox" name="days" value="Monday" style="margin-right: 5px;">Monday</label>
+      <label style="display: flex; align-items: center;"><input type="checkbox" name="days" value="Tuesday" style="margin-right: 5px;">Tuesday</label>
+      <label style="display: flex; align-items: center;"><input type="checkbox" name="days" value="Wednesday" style="margin-right: 5px;">Wednesday</label>
+      <label style="display: flex; align-items: center;"><input type="checkbox" name="days" value="Thursday" style="margin-right: 5px;">Thursday</label>
+      <label style="display: flex; align-items: center;"><input type="checkbox" name="days" value="Friday" style="margin-right: 5px;">Friday</label>
+      <label style="display: flex; align-items: center;"><input type="checkbox" name="days" value="Saturday" style="margin-right: 5px;">Saturday</label>
+      <label style="display: flex; align-items: center;"><input type="checkbox" name="days" value="Sunday" style="margin-right: 5px;">Sunday</label>
     </div>
 
-    <label><input type="checkbox" name="enabled" checked> Enabled</label>
+    <div class="toggle-container">
+      <label class="toggle-label" for="alarmToggle">Alarm:</label>
+      <label class="switch">
+        <input type="checkbox"id="alarmToggle" name="enabled" checked>
+        <span class="slider"></span>
+      </label>
+    </div>
+    
     <button type="submit">Add Schedule</button>
   </form>
 
