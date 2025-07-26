@@ -35,7 +35,8 @@ from gtts import gTTS
 import re
 import paho.mqtt.client as mqtt
 import requests 
-
+import time
+from datetime import datetime
 
 current_process = None
 app = Flask(__name__)
@@ -151,6 +152,15 @@ def on_message(client, userdata, msg):
                     "command": "delete",
                     "message": f"No schedule found with label: {label}"
                 }))
+        
+        elif command == "stop":
+            print("⏹️ Stop command received via MQTT")
+            stop_audio()  # This should stop current audio, make sure you implement it
+            client.publish(MQTT_TOPIC_PUBLISH, json.dumps({
+                "status": "success",
+                "command": "stop",
+                "message": "Audio playback stopped"
+            }))
 
         elif command == "play":
             file_name = data.get("file")
@@ -182,16 +192,19 @@ def on_message(client, userdata, msg):
             if speaker == "indoor":
                 # Example: route to indoor amplifier or ALSA device
                 print("➡️ Routing to indoor speaker")
+                play_audio(file_name)  # ← this should already handle your playback
                 # os.system('aplay -D plughw:1,0 {}'.format(file_path))  # example
             elif speaker == "outdoor":
                 print("➡️ Routing to outdoor speaker")
+                play_audio(file_name)  # ← this should already handle your playback
                 # os.system('aplay -D plughw:2,0 {}'.format(file_path))  # example
             else:
                 print("➡️ Routing to default speaker")
+                play_audio(file_name)  # ← this should already handle your playback
                 # os.system('aplay {}'.format(file_path))  # example
 
             # ✅ Call your actual play logic (e.g., ALSA/gTTS/mpg123/etc.)
-            play_audio(file_path)  # ← this should already handle your playback
+            # play_audio(file_name)  # ← this should already handle your playback
 
             client.publish(MQTT_TOPIC_PUBLISH, json.dumps({
                 "status": "success",
@@ -211,23 +224,20 @@ def mqtt_publish_loop(client):
 
     while True:
         try:
-            schedule_data = load_schedule()
-
-            # Add version if not already present
-            version = datetime.now().isoformat()
-
+            version = datetime.now().isoformat()  # Current timestamp
             payload = {
                 "imei": rpi_id,
                 "version": version
             }
 
             client.publish(MQTT_TOPIC_PUBLISH, json.dumps(payload))
-            print(f"📤 Published schedule to {MQTT_TOPIC_PUBLISH} @ {version}")
+            print(f"?? Published: {payload}")
 
         except Exception as e:
-            print(f"⚠️ Error publishing MQTT: {e}")
+            print(f"?? Error publishing MQTT: {e}")
 
-        time.sleep(10)  # Publish every 10 seconds
+        time.sleep(10)  # Repeat every 10 seconds
+
 
         
 def start_mqtt():
