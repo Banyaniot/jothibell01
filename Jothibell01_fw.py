@@ -37,6 +37,8 @@ import paho.mqtt.client as mqtt
 import requests 
 import time
 from datetime import datetime
+import serial
+import socket
 
 current_process = None
 app = Flask(__name__)
@@ -50,6 +52,15 @@ MQTT_BROKER = "103.207.4.72"  # Or your broker IP
 MQTT_PORT = 4000
 MQTT_TOPIC = "schoolbell/schedule"
 MQTT_TOPIC_PUBLISH = "schoolbell/status"
+
+
+
+# UART setup (adjust device if needed)
+ser = serial.Serial("/dev/serial0", baudrate=9600, timeout=1)
+# Global relay state list
+relay_states = [0] * 8
+# Port number for communication
+PORT = 5002
 
 # Create schedule file if not exists
 if not os.path.exists(SCHEDULE_FILE):
@@ -65,6 +76,35 @@ def get_rpi_serial():
     except Exception as e:
         print(f"⚠️ Failed to read RPi serial: {e}")
     return "0000000000000000"
+
+def get_ip_address():
+    return socket.gethostbyname(socket.gethostname())
+
+def send_relay_command(speaker_zone, label=""):
+    speaker_zone = speaker_zone.lower()
+    relay_states = [0] * 8
+
+    # Map speaker zones to relays
+    if speaker_zone == "indoor":
+        relay_states[0] = 1
+    elif speaker_zone == "outdoor":
+        relay_states[1] = 1
+    elif speaker_zone == "all":
+        relay_states = [1] * 8
+    elif speaker_zone == "off":
+        relay_states = [0] * 8
+
+    data = {
+        "command": "relay",
+        "relays": relay_states,
+        "label": label,
+        "ip": get_ip_address()
+    }
+
+    json_data = json.dumps(data)
+    ser.write((json_data + "\n").encode())
+    print("[UART SEND]", json_data)
+
 
 def on_connect(client, userdata, flags, rc):
     print(f"? MQTT Connected with result code {rc}")
@@ -189,22 +229,8 @@ def on_message(client, userdata, msg):
             # 🔊 Handle speaker selection (example routing logic)
             print(f"🔊 Playing '{file_name}' on speaker: {speaker}")
             
-            if speaker == "indoor":
-                # Example: route to indoor amplifier or ALSA device
-                print("➡️ Routing to indoor speaker")
-                play_audio(file_name)  # ← this should already handle your playback
-                # os.system('aplay -D plughw:1,0 {}'.format(file_path))  # example
-            elif speaker == "outdoor":
-                print("➡️ Routing to outdoor speaker")
-                play_audio(file_name)  # ← this should already handle your playback
-                # os.system('aplay -D plughw:2,0 {}'.format(file_path))  # example
-            else:
-                print("➡️ Routing to default speaker")
-                play_audio(file_name)  # ← this should already handle your playback
-                # os.system('aplay {}'.format(file_path))  # example
-
-            # ✅ Call your actual play logic (e.g., ALSA/gTTS/mpg123/etc.)
-            # play_audio(file_name)  # ← this should already handle your playback
+            send_relay_command(data.get('speaker', 'indoor'), item.get('label', ''))
+            play_audio(file_name)
 
             client.publish(MQTT_TOPIC_PUBLISH, json.dumps({
                 "status": "success",
@@ -314,6 +340,9 @@ def bell_scheduler():
             key = (time_str, item['file'])
             if item['time'] == time_str and key not in triggered:
                 print(f"?? Bell ringing at {time_str} on {today} or {item.get('date', '')}")
+                # Speaker relay ON
+                send_relay_command(item.get('speaker', 'indoor'), item.get('label', ''))
+
                 play_audio(item['file'])
                 triggered.add(key)
 
