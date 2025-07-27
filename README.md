@@ -17,46 +17,27 @@ git fetch origin && git reset --hard origin/main && git clean -fd
 Tested comment
 
 sample_data = {
+ "command": "add",
+    "data": {
+    "time": "09:00",
+    "file": "JanaGanman.mp3",
+    "label": "Assembly Bell2",
+     "enabled": True,
+     "days": ["Monday", "Wednesday"],
+     "speaker": "indoor",
+     "url": "http://103.207.4.72:3040/files/JanaGanman.mp3"
+    }
 
-# "command": "add",
-
-# "data": {
-
-# "time": "09:00",
-
-# "file": "JanaGanman.mp3",
-
-# "label": "Assembly Bell2",
-
-# "enabled": True,
-
-# "days": ["Monday", "Wednesday"],
-
-# "speaker": "indoor",
-
-# "url": "http://103.207.4.72:3040/files/JanaGanman.mp3"
-
-# }
-
-# "command": "delete",
-
-# "data": {
-
-# "label": "Assembly Bell"
-
-# }
-
-# "command": "play",
-
-# "data": {
-
-# "file": "JanaGanman.mp3",
-
-# "url": "http://103.207.4.72:3040/files/JanaGanman.mp3",
-
-# "speaker": "outdoor"
-
-# }
+"command": "delete",
+"data": {
+ "label": "Assembly Bell"
+ }
+"command": "play",
+"data": {
+"file": "JanaGanman.mp3",
+"url": "http://103.207.4.72:3040/files/JanaGanman.mp3",
+"speaker": "outdoor"
+}
 
 "command": "stop"
 
