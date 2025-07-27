@@ -62,6 +62,11 @@ relay_states = [0] * 8
 # Port number for communication
 PORT = 5002
 
+# Global variable to store current relay state
+current_speaker_zone = "off"
+current_label = ""
+
+
 # Create schedule file if not exists
 if not os.path.exists(SCHEDULE_FILE):
     with open(SCHEDULE_FILE, 'w') as f:
@@ -77,8 +82,6 @@ def get_rpi_serial():
         print(f"⚠️ Failed to read RPi serial: {e}")
     return "0000000000000000"
 
-def get_ip_address():
-    return socket.gethostbyname(socket.gethostname())
 
 def send_relay_command(speaker_zone, label=""):
     speaker_zone = speaker_zone.lower()
@@ -98,13 +101,25 @@ def send_relay_command(speaker_zone, label=""):
         "command": "relay",
         "relays": relay_states,
         "label": label,
-        "ip": get_ip_address()
+        "ip": get_local_ip()
     }
 
     json_data = json.dumps(data)
     ser.write((json_data + "\n").encode())
     print("[UART SEND]", json_data)
+    # Store latest state
+    current_speaker_zone = speaker_zone
+    current_label = label
 
+    
+# Background thread to send every 10 sec
+def auto_send_relay_command():
+    while True:
+        send_relay_command(current_speaker_zone, current_label)
+        time.sleep(10)
+
+# Start background thread
+threading.Thread(target=auto_send_relay_command, daemon=True).start()
 
 def on_connect(client, userdata, flags, rc):
     print(f"? MQTT Connected with result code {rc}")
@@ -229,7 +244,7 @@ def on_message(client, userdata, msg):
             # 🔊 Handle speaker selection (example routing logic)
             print(f"🔊 Playing '{file_name}' on speaker: {speaker}")
             
-            send_relay_command(data.get('speaker', 'indoor'), item.get('label', ''))
+            send_relay_command(data.get('speaker', 'indoor'), data.get('label', ''))
             play_audio(file_name)
 
             client.publish(MQTT_TOPIC_PUBLISH, json.dumps({
