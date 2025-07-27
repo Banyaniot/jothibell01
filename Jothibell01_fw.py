@@ -65,7 +65,7 @@ PORT = 5002
 # Global variable to store current relay state
 current_speaker_zone = "off"
 current_label = ""
-
+lock = threading.Lock()
 
 # Create schedule file if not exists
 if not os.path.exists(SCHEDULE_FILE):
@@ -118,14 +118,25 @@ def send_relay_command(speaker_zone, label=""):
     ser.write((json_data + "\n").encode())
     print("[UART SEND]", json_data)
     # Store latest state
-    current_speaker_zone = speaker_zone
-    current_label = label
-
+    update_speaker_zone(speaker_zone,label)
     
 # Background thread to send every 10 sec
+def update_speaker_zone(zone, label):
+    global current_speaker_zone, current_label
+    with lock:
+        current_speaker_zone = zone
+        current_label = label
+
 def auto_send_relay_command():
+    global current_speaker_zone, current_label
     while True:
-        send_relay_command(current_speaker_zone, current_label)
+        try:
+            with lock:
+                zone = current_speaker_zone
+                label = current_label
+            send_relay_command(zone, label)
+        except Exception as e:
+            print("[Auto Relay Thread Error]", e)
         time.sleep(10)
 
 # Start background thread
