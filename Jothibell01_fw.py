@@ -81,7 +81,17 @@ def get_rpi_serial():
     except Exception as e:
         print(f"⚠️ Failed to read RPi serial: {e}")
     return "0000000000000000"
-
+        
+def get_local_ip():
+    try:
+        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+        s.connect(("8.8.8.8", 80))
+        local_ip = s.getsockname()[0]
+        s.close()
+        return local_ip
+    except Exception as e:
+        print(f"?? Could not detect local IP: {e}")
+        return "127.0.0.1"
 
 def send_relay_command(speaker_zone, label=""):
     speaker_zone = speaker_zone.lower()
@@ -292,17 +302,7 @@ def start_mqtt():
 
 # Start MQTT thread
 threading.Thread(target=start_mqtt, daemon=True).start()
-        
-def get_local_ip():
-    try:
-        s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        s.connect(("8.8.8.8", 80))
-        local_ip = s.getsockname()[0]
-        s.close()
-        return local_ip
-    except Exception as e:
-        print(f"?? Could not detect local IP: {e}")
-        return "127.0.0.1"
+
 
 def load_schedule():
     with open(SCHEDULE_FILE) as f:
