@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Mic Stream</title>
+    <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+  </head>
+  <body
+    style="
+      font-family: Arial;
+      background-color: #111;
+      color: #eee;
+      text-align: center;
+      padding-top: 40px;
+    "
+  >
+    <h2>🎙️ Mobile Mic Streaming</h2>
+    <button
+      onclick="startRecording()"
+      style="font-size: 20px; padding: 10px 20px;"
+    >
+      Start Mic
+    </button>
+    <button
+      onclick="stopRecording()"
+      style="font-size: 20px; padding: 10px 20px; margin-left: 10px;"
+    >
+      Stop
+    </button>
+
+    <script>
+      const socket = io();
+      let audioContext, processor;
+
+      async function startRecording() {
+        const stream = await navigator.mediaDevices.getUserMedia({
+          audio: true,
+        });
+        audioContext = new (window.AudioContext || window.webkitAudioContext)({
+          sampleRate: 48000,
+        });
+        const source = audioContext.createMediaStreamSource(stream);
+        processor = audioContext.createScriptProcessor(4096, 1, 1);
+
+        processor.onaudioprocess = function (e) {
+          const inputData = e.inputBuffer.getChannelData(0);
+          const buffer = new ArrayBuffer(inputData.length * 2);
+          const view = new DataView(buffer);
+          for (let i = 0; i < inputData.length; i++) {
+            let s = Math.max(-1, Math.min(1, inputData[i]));
+            view.setInt16(i * 2, s < 0 ? s * 0x8000 : s * 0x7fff, true);
+          }
+          socket.emit("audio_chunk", buffer);
+        };
+
+        source.connect(processor);
+        processor.connect(audioContext.destination);
+      }
+
+      function stopRecording() {
+        if (processor) processor.disconnect();
+        if (audioContext) audioContext.close();
+        socket.emit("stop_recording");
+      }
+    </script>
+  </body>
+</html>

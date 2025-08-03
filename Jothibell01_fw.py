@@ -39,6 +39,10 @@ import time
 from datetime import datetime
 import serial
 import socket
+import pyaudio
+# PyAudio setup
+p = pyaudio.PyAudio()
+audio_stream = None
 
 current_process = None
 app = Flask(__name__)
@@ -71,6 +75,31 @@ lock = threading.Lock()
 if not os.path.exists(SCHEDULE_FILE):
     with open(SCHEDULE_FILE, 'w') as f:
         json.dump([], f)
+
+
+
+@socketio.on('connect')
+def handle_connect():
+    global audio_stream
+    print("[✓] Mic client connected")
+    if audio_stream is None:
+        audio_stream = p.open(format=pyaudio.paInt16,
+                              channels=1,
+                              rate=48000,
+                              output=True,
+                              frames_per_buffer=1024)
+        print("[✓] Audio output stream opened")
+
+@socketio.on('audio_chunk')
+def handle_audio_chunk(data):
+    if audio_stream:
+        audio_stream.write(data)
+
+@socketio.on('stop_recording')
+def handle_stop():
+    print("[✓] Mic stream stopped")
+
+
 
 def get_rpi_serial():
     try:
@@ -622,6 +651,8 @@ HTML = """
         <span class="slider"></span>
       </label>
     </div>
+
+    <a href="/mic" target="_blank" style="color: yellow;">🎤 Mic Stream</a>
     
     <button type="submit">Add Schedule</button>
   </form>
@@ -766,7 +797,11 @@ def speak_text():
     # Play the generated audio
     play_audio(filename)
     return redirect(url_for('index'))
-    
+
+@app.route('/mic')
+def mic_stream():
+    return render_template('mic_stream.html')
+
 # Start background scheduler
 threading.Thread(target=bell_scheduler, daemon=True).start()
 
