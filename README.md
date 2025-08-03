@@ -41,4 +41,9 @@ sample_data = {
 
 "command": "stop"
 
+"command": "speaker",
+"data": {
+ "speaker": "outdoor"
+ }
+ 
 }
