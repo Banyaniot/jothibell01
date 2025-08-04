@@ -134,23 +134,23 @@ def get_local_ip():
 def send_relay_command(speaker_zone, label=""):
     speaker_zone = speaker_zone.lower()
     relay_states = [0] * 8
-
-    # Map speaker zones to relays
-    if speaker_zone == "Classroom1":
+    print (speaker_zone)
+    # Map speaker zones to relays 
+    if speaker_zone == "classroom1": 
         relay_states[0] = 1
-    elif speaker_zone == "Classroom2":
+    elif speaker_zone == "classroom2":
         relay_states[1] = 1
-    elif speaker_zone == "Classroom3":
+    elif speaker_zone == "classroom3":
         relay_states[2] = 1
-    elif speaker_zone == "Classroom4":
+    elif speaker_zone == "classroom4":
         relay_states[3] = 1
-    elif speaker_zone == "Classroom5":
+    elif speaker_zone == "classroom5":
         relay_states[4] = 1
-    elif speaker_zone == "Classroom6":
+    elif speaker_zone == "classroom6":
         relay_states[5] = 1
-    elif speaker_zone == "Classroom7":
+    elif speaker_zone == "classroom7":
         relay_states[6] = 1
-    elif speaker_zone == "Classroom8":
+    elif speaker_zone == "classroom8":
         relay_states[7] = 1
     elif speaker_zone == "all":
         relay_states = [1] * 8
@@ -650,7 +650,8 @@ HTML = """
       <input type="checkbox" id="darkToggle"> Dark Mode
     </label>
   </h1>
-
+ 
+       
   <form action="/upload" method="post" enctype="multipart/form-data">
     <label>Upload New Audio File:</label>
     <input type="file" name="file" required>
@@ -701,27 +702,11 @@ HTML = """
     </div>
 
     <a href="/mic" target="_blank" style="color: yellow;">ðŸŽ¤ Mic Stream</a>
-    <div style="text-align: center; margin-bottom: 30px;">
-
-        <h3>Select Speaker Zones</h3>
-        <form action="/apply_speaker" method="post">
-          {% for i in range(1, 9) %}
-            <label style="display:inline-block; width: 120px; margin: 5px;">
-              <input type="checkbox" name="speaker_zone" value="Classroom{{ i }}"> Classroom{{ i }}
-            </label>
-          {% endfor %}
-          <br><br>
-          <label style="margin-right: 15px;">
-            <input type="checkbox" name="speaker_zone" value="AllOn"> All On 🔊
-          </label>
-          <label>
-            <input type="checkbox" name="speaker_zone" value="AllOff"> All Off ❌
-          </label>
-          <br><br>
-          <button type="submit" style="padding: 8px 20px;">Apply</button>
-        </form>
-      </div>
-
+    
+   <div style="text-align: left; margin: 10px 20px;">
+    <a href="{{ url_for('speaker_selection') }}">Manual Speaker Zone Control</a>
+   </div>
+   
     <button type="submit">Add Schedule</button>
   </form>
 
@@ -846,51 +831,32 @@ def play_now(filename):
     play_audio(filename)
     return redirect(url_for('index'))
 
-@app.route("/speak", methods=["POST"])
-def speak_text():
-    from gtts import gTTS
-    text = request.form.get('tts_text', '').strip()
-    if not text:
-        return redirect(url_for('index'))
+@app.route("/speaker", methods=["GET", "POST"])
+def speaker_selection():
+    global current_speaker_zone
 
-    # Sanitize text to create a safe filename
-    safe_filename = re.sub(r'[^a-zA-Z0-9_]+', '_', text)[:30]  # Limit to 30 chars
-    filename = f"{safe_filename}.mp3"
-    tts_path = os.path.join(UPLOAD_FOLDER, filename)
+    if request.method == "POST":
+        selected_zones = request.form.getlist("speaker_zone")
 
-    # Generate and save TTS
-    tts = gTTS(text=text, lang='en')
-    tts.save(tts_path)
+        # Determine and apply command
+        if "AllOff" in selected_zones:
+            send_relay_command("off", "speaker_zone")
+            current_speaker_zone = "AllOff"
+        elif "AllOn" in selected_zones:
+            send_relay_command("all", "speaker_zone")
+            current_speaker_zone = "AllOn"
+        else:
+            for zone in selected_zones:
+                send_relay_command(zone, "speaker_zone")
+            current_speaker_zone = ", ".join(selected_zones)
 
-    # Play the generated audio
-    play_audio(filename)
-    return redirect(url_for('index'))
+        return redirect(url_for("speaker_selection"))
 
+    return render_template("speaker.html", speaker_zone=current_speaker_zone)    
+    
 @app.route('/mic')
 def mic_stream():
     return render_template('mic_stream.html')
-
-
-@app.route("/apply_speaker", methods=["POST"])
-def apply_speaker():
-    selected_zones = request.form.getlist("speaker_zone")
-
-    # Priority: if 'AllOff' is selected, turn off everything
-    if "AllOff" in selected_zones:
-        send_relay_command("AllOff","speaker")
-        current_speaker_zone = "all"
-    elif "AllOn" in selected_zones:
-        send_relay_command("AllOn","speaker")
-        current_speaker_zone = "off"
-    else:
-        # You can pass the selected classrooms list to your relay handler
-        send_relay_command(selected_zones,"speaker")
-        current_speaker_zone = ", ".join(selected_zones)
-
-    with lock:
-        globals()["current_speaker_zone"] = current_speaker_zone
-
-    return redirect(url_for("index"))
 
 # Start background scheduler
 threading.Thread(target=bell_scheduler, daemon=True).start()

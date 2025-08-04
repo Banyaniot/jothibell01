@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Speaker Zone Selection</title>
+  <style>
+    body {
+      background-color: #111;
+      color: #eee;
+      font-family: Arial;
+      text-align: center;
+      padding: 30px;
+    }
+    .checkbox-group {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 10px;
+      max-width: 300px;
+      margin: 0 auto;
+    }
+    .checkbox-group label {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    button {
+      margin-top: 20px;
+      padding: 10px 20px;
+      font-size: 16px;
+      background-color: #28a745;
+      border: none;
+      color: white;
+      border-radius: 5px;
+      cursor: pointer;
+    }
+    a {
+      color: #ddd;
+      display: inline-block;
+      margin-top: 20px;
+    }
+  </style>
+</head>
+<body>
+  <h2>Select Speaker Zones</h2>
+  <form method="POST">
+    <div class="checkbox-group">
+      {% for i in range(1, 9) %}
+        <label>
+          <input type="checkbox" name="speaker_zone" value="Classroom{{ i }}"
+            {% if "Classroom" ~ i in speaker_zone %}checked{% endif %}>
+          Classroom{{ i }}
+        </label>
+      {% endfor %}
+      <label>
+        <input type="checkbox" name="speaker_zone" value="AllOn"
+          {% if "AllOn" in speaker_zone %}checked{% endif %}>
+        All On
+      </label>
+      <label>
+        <input type="checkbox" name="speaker_zone" value="AllOff"
+          {% if "AllOff" in speaker_zone %}checked{% endif %}>
+        All Off
+      </label>
+    </div>
+    <button type="submit">Apply</button>
+  </form>
+  <a href="{{ url_for('index') }}">Back to Home</a>
+</body>
+</html>
