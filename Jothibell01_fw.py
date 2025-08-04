@@ -40,6 +40,15 @@ from datetime import datetime
 import serial
 import socket
 import pyaudio
+from flask import Flask
+from flask_socketio import SocketIO
+
+
+from flask import Flask, render_template, request
+
+app = Flask(__name__)
+socketio = SocketIO(app)
+
 # PyAudio setup
 p = pyaudio.PyAudio()
 audio_stream = None
@@ -81,14 +90,14 @@ if not os.path.exists(SCHEDULE_FILE):
 @socketio.on('connect')
 def handle_connect():
     global audio_stream
-    print("[✓] Mic client connected")
+    print("[âœ“] Mic client connected")
     if audio_stream is None:
         audio_stream = p.open(format=pyaudio.paInt16,
                               channels=1,
                               rate=48000,
                               output=True,
                               frames_per_buffer=1024)
-        print("[✓] Audio output stream opened")
+        print("[âœ“] Audio output stream opened")
 
 @socketio.on('audio_chunk')
 def handle_audio_chunk(data):
@@ -97,7 +106,7 @@ def handle_audio_chunk(data):
 
 @socketio.on('stop_recording')
 def handle_stop():
-    print("[✓] Mic stream stopped")
+    print("[âœ“] Mic stream stopped")
 
 
 
@@ -108,7 +117,7 @@ def get_rpi_serial():
                 if line.startswith('Serial'):
                     return line.strip().split(':')[1].strip()
     except Exception as e:
-        print(f"⚠️ Failed to read RPi serial: {e}")
+        print(f"âš ï¸ Failed to read RPi serial: {e}")
     return "0000000000000000"
         
 def get_local_ip():
@@ -127,10 +136,22 @@ def send_relay_command(speaker_zone, label=""):
     relay_states = [0] * 8
 
     # Map speaker zones to relays
-    if speaker_zone == "indoor":
+    if speaker_zone == "Classroom1":
         relay_states[0] = 1
-    elif speaker_zone == "outdoor":
+    elif speaker_zone == "Classroom2":
         relay_states[1] = 1
+    elif speaker_zone == "Classroom3":
+        relay_states[2] = 1
+    elif speaker_zone == "Classroom4":
+        relay_states[3] = 1
+    elif speaker_zone == "Classroom5":
+        relay_states[4] = 1
+    elif speaker_zone == "Classroom6":
+        relay_states[5] = 1
+    elif speaker_zone == "Classroom7":
+        relay_states[6] = 1
+    elif speaker_zone == "Classroom8":
+        relay_states[7] = 1
     elif speaker_zone == "all":
         relay_states = [1] * 8
     elif speaker_zone == "off":
@@ -176,7 +197,7 @@ def on_connect(client, userdata, flags, rc):
     client.subscribe(MQTT_TOPIC)
 
 def on_message(client, userdata, msg):
-    print(f"📩 MQTT Message received on {msg.topic}")
+    print(f"ðŸ“© MQTT Message received on {msg.topic}")
     try:
         payload = json.loads(msg.payload.decode())
         command = payload.get("command")
@@ -192,7 +213,7 @@ def on_message(client, userdata, msg):
             days = data.get("days", [])
             date = data.get("date", "")
             file_url = data.get("url", "")
-            speaker = data.get("speaker", "default")  # ✅ Add speaker type
+            speaker = data.get("speaker", "default")  # âœ… Add speaker type
 
             if not time_val or not file_val:
                 raise ValueError("Missing 'time' or 'file' in add command")
@@ -207,7 +228,7 @@ def on_message(client, userdata, msg):
                         response.raise_for_status()
                         with open(file_path, 'wb') as f:
                             f.write(response.content)
-                        print(f"📥 Downloaded file from {file_url}")
+                        print(f"ðŸ“¥ Downloaded file from {file_url}")
                     except Exception as e:
                         raise Exception(f"Failed to download file: {e}")
                 else:
@@ -221,11 +242,11 @@ def on_message(client, userdata, msg):
                 "enabled": enabled,
                 "days": days,
                 "date": date,
-                "speaker": speaker  # ✅ Save speaker in schedule
+                "speaker": speaker  # âœ… Save speaker in schedule
             })
             save_schedule(schedule)
 
-            print("✅ Schedule added via MQTT")
+            print("âœ… Schedule added via MQTT")
             client.publish(MQTT_TOPIC_PUBLISH, json.dumps({
                 "status": "success",
                 "command": "add",
@@ -242,7 +263,7 @@ def on_message(client, userdata, msg):
                     removed = schedule.pop(i)
                     save_schedule(schedule)
                     found = True
-                    print(f"🗑️ Deleted schedule with label: {label}")
+                    print(f"ðŸ—‘ï¸ Deleted schedule with label: {label}")
                     client.publish(MQTT_TOPIC_PUBLISH, json.dumps({
                         "status": "success",
                         "command": "delete",
@@ -251,15 +272,42 @@ def on_message(client, userdata, msg):
                     break
 
             if not found:
-                print(f"⚠️ No schedule found with label: {label}")
+                print(f"âš ï¸ No schedule found with label: {label}")
                 client.publish(MQTT_TOPIC_PUBLISH, json.dumps({
                     "status": "error",
                     "command": "delete",
                     "message": f"No schedule found with label: {label}"
                 }))
-        
+        elif command == "speaker":
+            speaker = data.get("speaker", "").strip().lower()
+
+            if not speaker:
+                raise ValueError("Missing 'speaker' value in speaker command")
+
+            try:
+                # ?? Save selected speaker as default
+                with open("current_speaker.txt", "w") as f:
+                    f.write(speaker)
+
+                # ?? Trigger relay to switch output to the selected speaker (e.g., 'outdoor') from the speaker command
+                send_relay_command(speaker, data.get('label', ''))
+
+                print(f"?? Default speaker set to: {speaker}")
+                client.publish(MQTT_TOPIC_PUBLISH, json.dumps({
+                    "status": "success",
+                    "command": "speaker",
+                    "message": f"Default speaker set to: {speaker}"
+                }))
+            except Exception as e:
+                print(f"? Failed to set speaker: {e}")
+                client.publish(MQTT_TOPIC_PUBLISH, json.dumps({
+                    "status": "error",
+                    "command": "speaker",
+                    "message": f"Failed to set speaker: {str(e)}"
+                }))
+               
         elif command == "stop":
-            print("⏹️ Stop command received via MQTT")
+            print("â¹ï¸ Stop command received via MQTT")
             stop_audio()  # This should stop current audio, make sure you implement it
             client.publish(MQTT_TOPIC_PUBLISH, json.dumps({
                 "status": "success",
@@ -270,14 +318,14 @@ def on_message(client, userdata, msg):
         elif command == "play":
             file_name = data.get("file")
             file_url = data.get("url", "")
-            speaker = data.get("speaker", "default").lower()  # ✅ get speaker value
+            speaker = data.get("speaker", "default").lower()  # âœ… get speaker value
 
             if not file_name:
                 raise ValueError("Missing 'file' in play command")
 
             file_path = os.path.join(UPLOAD_FOLDER, file_name)
 
-            # 🔽 Download the file if it doesn't exist
+            # ðŸ”½ Download the file if it doesn't exist
             if not os.path.exists(file_path):
                 if file_url:
                     try:
@@ -285,14 +333,14 @@ def on_message(client, userdata, msg):
                         response.raise_for_status()
                         with open(file_path, 'wb') as f:
                             f.write(response.content)
-                        print(f"📥 Downloaded file from {file_url}")
+                        print(f"ðŸ“¥ Downloaded file from {file_url}")
                     except Exception as e:
                         raise Exception(f"Failed to download file: {e}")
                 else:
                     raise Exception(f"File '{file_name}' not found and no download URL provided")
 
-            # 🔊 Handle speaker selection (example routing logic)
-            print(f"🔊 Playing '{file_name}' on speaker: {speaker}")
+            # ðŸ”Š Handle speaker selection (example routing logic)
+            print(f"ðŸ”Š Playing '{file_name}' on speaker: {speaker}")
             
             send_relay_command(data.get('speaker', 'indoor'), data.get('label', ''))
             play_audio(file_name)
@@ -652,8 +700,28 @@ HTML = """
       </label>
     </div>
 
-    <a href="/mic" target="_blank" style="color: yellow;">🎤 Mic Stream</a>
-    
+    <a href="/mic" target="_blank" style="color: yellow;">ðŸŽ¤ Mic Stream</a>
+    <div style="text-align: center; margin-bottom: 30px;">
+
+        <h3>Select Speaker Zones</h3>
+        <form action="/apply_speaker" method="post">
+          {% for i in range(1, 9) %}
+            <label style="display:inline-block; width: 120px; margin: 5px;">
+              <input type="checkbox" name="speaker_zone" value="Classroom{{ i }}"> Classroom{{ i }}
+            </label>
+          {% endfor %}
+          <br><br>
+          <label style="margin-right: 15px;">
+            <input type="checkbox" name="speaker_zone" value="AllOn"> All On 🔊
+          </label>
+          <label>
+            <input type="checkbox" name="speaker_zone" value="AllOff"> All Off ❌
+          </label>
+          <br><br>
+          <button type="submit" style="padding: 8px 20px;">Apply</button>
+        </form>
+      </div>
+
     <button type="submit">Add Schedule</button>
   </form>
 
@@ -736,7 +804,7 @@ def add_schedule():
     enabled = 'enabled' in request.form
     days = request.form.getlist('days')
     date = request.form.get('date', '')
-    speaker = request.form.get('speaker', 'default')  # ✅ Get speaker
+    speaker = request.form.get('speaker', 'default')  # âœ… Get speaker
 
     schedule = load_schedule()
     schedule.append({
@@ -746,7 +814,7 @@ def add_schedule():
         'enabled': enabled,
         'days': days,
         'date': date,
-        'speaker': speaker  # ✅ Save speaker in the schedule
+        'speaker': speaker  # âœ… Save speaker in the schedule
     })
     save_schedule(schedule)
     return redirect(url_for('index'))
@@ -802,10 +870,33 @@ def speak_text():
 def mic_stream():
     return render_template('mic_stream.html')
 
+
+@app.route("/apply_speaker", methods=["POST"])
+def apply_speaker():
+    selected_zones = request.form.getlist("speaker_zone")
+
+    # Priority: if 'AllOff' is selected, turn off everything
+    if "AllOff" in selected_zones:
+        send_relay_command("AllOff","speaker")
+        current_speaker_zone = "all"
+    elif "AllOn" in selected_zones:
+        send_relay_command("AllOn","speaker")
+        current_speaker_zone = "off"
+    else:
+        # You can pass the selected classrooms list to your relay handler
+        send_relay_command(selected_zones,"speaker")
+        current_speaker_zone = ", ".join(selected_zones)
+
+    with lock:
+        globals()["current_speaker_zone"] = current_speaker_zone
+
+    return redirect(url_for("index"))
+
 # Start background scheduler
 threading.Thread(target=bell_scheduler, daemon=True).start()
 
 if __name__ == "__main__":
     local_ip = get_local_ip()
-    print(f"?? Running on: http://{local_ip}:5000")
-    app.run(host=local_ip, port=5002, debug=True)
+    print(f"?? Running on: http://{local_ip}:5002")
+    #app.run(host=local_ip, port=5002, debug=True)
+    socketio.run(app, host=local_ip, port=5002)

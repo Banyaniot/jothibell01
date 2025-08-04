@@ -2,66 +2,88 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <title>Mic Stream</title>
-    <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Mic Test</title>
+    <style>
+      body {
+        font-family: Arial;
+        text-align: center;
+        padding: 20px;
+      }
+      button {
+        padding: 10px 20px;
+        font-size: 16px;
+        margin: 10px;
+      }
+      #status {
+        margin-top: 20px;
+        color: #666;
+      }
+      .error {
+        color: red;
+      }
+    </style>
   </head>
-  <body
-    style="
-      font-family: Arial;
-      background-color: #111;
-      color: #eee;
-      text-align: center;
-      padding-top: 40px;
-    "
-  >
-    <h2>🎙️ Mobile Mic Streaming</h2>
-    <button
-      onclick="startRecording()"
-      style="font-size: 20px; padding: 10px 20px;"
-    >
-      Start Mic
-    </button>
-    <button
-      onclick="stopRecording()"
-      style="font-size: 20px; padding: 10px 20px; margin-left: 10px;"
-    >
-      Stop
-    </button>
+  <body>
+    <h2>Microphone Test</h2>
+    <button id="startBtn">Start Mic</button>
+    <button id="stopBtn" disabled>Stop</button>
+    <div id="status">Click "Start Mic" to begin</div>
 
     <script>
-      const socket = io();
-      let audioContext, processor;
+      const startBtn = document.getElementById("startBtn");
+      const stopBtn = document.getElementById("stopBtn");
+      const statusEl = document.getElementById("status");
+      let stream;
+
+      // First check if mediaDevices is available
+      if (!navigator.mediaDevices) {
+        statusEl.textContent =
+          "Media devices API not available in this browser";
+        statusEl.className = "error";
+        startBtn.disabled = true;
+      }
 
       async function startRecording() {
-        const stream = await navigator.mediaDevices.getUserMedia({
-          audio: true,
-        });
-        audioContext = new (window.AudioContext || window.webkitAudioContext)({
-          sampleRate: 48000,
-        });
-        const source = audioContext.createMediaStreamSource(stream);
-        processor = audioContext.createScriptProcessor(4096, 1, 1);
+        try {
+          statusEl.textContent = "Accessing microphone...";
+          startBtn.disabled = true;
 
-        processor.onaudioprocess = function (e) {
-          const inputData = e.inputBuffer.getChannelData(0);
-          const buffer = new ArrayBuffer(inputData.length * 2);
-          const view = new DataView(buffer);
-          for (let i = 0; i < inputData.length; i++) {
-            let s = Math.max(-1, Math.min(1, inputData[i]));
-            view.setInt16(i * 2, s < 0 ? s * 0x8000 : s * 0x7fff, true);
-          }
-          socket.emit("audio_chunk", buffer);
-        };
+          // Modern approach with error handling
+          stream = await navigator.mediaDevices.getUserMedia({
+            audio: {
+              sampleRate: 48000,
+              channelCount: 1,
+              echoCancellation: false,
+              noiseSuppression: false,
+              autoGainControl: false,
+            },
+          });
 
-        source.connect(processor);
-        processor.connect(audioContext.destination);
+          statusEl.textContent = "Microphone active!";
+          stopBtn.disabled = false;
+
+          // Here you would add your audio processing code
+          console.log("Microphone stream:", stream);
+        } catch (error) {
+          console.error("Microphone error:", error);
+          statusEl.textContent = `Error: ${error.message}`;
+          statusEl.className = "error";
+          startBtn.disabled = false;
+        }
       }
 
       function stopRecording() {
-        if (processor) processor.disconnect();
-        if (audioContext) audioContext.close();
-        socket.emit("stop_recording");
+        if (stream) {
+          stream.getTracks().forEach((track) => track.stop());
+          statusEl.textContent = "Microphone stopped";
+          startBtn.disabled = false;
+          stopBtn.disabled = true;
+        }
       }
+
+      startBtn.addEventListener("click", startRecording);
+      stopBtn.addEventListener("click", stopRecording);
     </script>
   </body>
 </html>
