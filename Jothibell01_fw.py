@@ -132,30 +132,36 @@ def get_local_ip():
         return "127.0.0.1"
 
 def send_relay_command(speaker_zone, label=""):
-    speaker_zone = speaker_zone.lower()
+    if isinstance(speaker_zone, str):
+        zones = [z.strip().lower() for z in speaker_zone.split(",")]
+    elif isinstance(speaker_zone, list):
+        zones = [z.strip().lower() for z in speaker_zone]
+    else:
+        zones = []
+
     relay_states = [0] * 8
-    print (speaker_zone)
-    # Map speaker zones to relays 
-    if speaker_zone == "classroom1": 
-        relay_states[0] = 1
-    elif speaker_zone == "classroom2":
-        relay_states[1] = 1
-    elif speaker_zone == "classroom3":
-        relay_states[2] = 1
-    elif speaker_zone == "classroom4":
-        relay_states[3] = 1
-    elif speaker_zone == "classroom5":
-        relay_states[4] = 1
-    elif speaker_zone == "classroom6":
-        relay_states[5] = 1
-    elif speaker_zone == "classroom7":
-        relay_states[6] = 1
-    elif speaker_zone == "classroom8":
-        relay_states[7] = 1
-    elif speaker_zone == "all":
-        relay_states = [1] * 8
-    elif speaker_zone == "off":
-        relay_states = [0] * 8
+    print("Selected zones:", zones)
+
+    zone_map = {
+        "classroom1": 0,
+        "classroom2": 1,
+        "classroom3": 2,
+        "classroom4": 3,
+        "classroom5": 4,
+        "classroom6": 5,
+        "classroom7": 6,
+        "classroom8": 7
+    }
+
+    for zone in zones:
+        if zone == "all":
+            relay_states = [1] * 8
+            break
+        elif zone == "off":
+            relay_states = [0] * 8
+            break
+        elif zone in zone_map:
+            relay_states[zone_map[zone]] = 1
 
     data = {
         "command": "relay",
@@ -167,9 +173,8 @@ def send_relay_command(speaker_zone, label=""):
     json_data = json.dumps(data)
     ser.write((json_data + "\n").encode())
     print("[UART SEND]", json_data)
-    # Store latest state
-    update_speaker_zone(speaker_zone,label)
-    
+    update_speaker_zone(",".join(zones), label)
+
 # Background thread to send every 10 sec
 def update_speaker_zone(zone, label):
     global current_speaker_zone, current_label
@@ -278,33 +283,48 @@ def on_message(client, userdata, msg):
                     "command": "delete",
                     "message": f"No schedule found with label: {label}"
                 }))
+   
+   
         elif command == "speaker":
-            speaker = data.get("speaker", "").strip().lower()
-
-            if not speaker:
-                raise ValueError("Missing 'speaker' value in speaker command")
-
             try:
-                # ?? Save selected speaker as default
+                print(f"?? Parsed MQTT data: {json.dumps(data, indent=2)}")
+
+                # Flexible extraction: handle both "data.speaker" and "speakers"
+                if "data" in data and "speaker" in data["data"]:
+                    speaker_list = data["data"]["speaker"]
+                elif "speakers" in data:
+                    speaker_list = data["speakers"]
+                else:
+                    raise ValueError("Missing 'speaker' or 'speakers' value in speaker command")
+
+                # Ensure it's a list
+                if isinstance(speaker_list, str):
+                    speaker_list = [speaker_list]
+                elif not isinstance(speaker_list, list):
+                    raise ValueError("Speaker value must be a string or list")
+
+                # Save to file
                 with open("current_speaker.txt", "w") as f:
-                    f.write(speaker)
+                    f.write(",".join(speaker_list).lower())
 
-                # ?? Trigger relay to switch output to the selected speaker (e.g., 'outdoor') from the speaker command
-                send_relay_command(speaker, data.get('label', ''))
+                # Send to relay command
+                send_relay_command(speaker_list, data.get('label', ''))
 
-                print(f"?? Default speaker set to: {speaker}")
+                print(f"? Default speaker(s) set to: {speaker_list}")
                 client.publish(MQTT_TOPIC_PUBLISH, json.dumps({
                     "status": "success",
                     "command": "speaker",
-                    "message": f"Default speaker set to: {speaker}"
+                    "message": f"Default speaker(s) set to: {speaker_list}"
                 }))
             except Exception as e:
-                print(f"? Failed to set speaker: {e}")
+                print(f"? Failed to set speaker(s): {e}")
                 client.publish(MQTT_TOPIC_PUBLISH, json.dumps({
                     "status": "error",
                     "command": "speaker",
-                    "message": f"Failed to set speaker: {str(e)}"
+                    "message": f"Failed to set speaker(s): {str(e)}"
                 }))
+
+
                
         elif command == "stop":
             print("â¹ï¸ Stop command received via MQTT")
