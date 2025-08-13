@@ -52,7 +52,7 @@ socketio = SocketIO(app)
 # PyAudio setup
 p = pyaudio.PyAudio()
 audio_stream = None
-
+mic_process = None
 current_process = None
 app = Flask(__name__)
 
@@ -203,6 +203,7 @@ def on_connect(client, userdata, flags, rc):
 
 def on_message(client, userdata, msg):
     print(f"ðŸ“© MQTT Message received on {msg.topic}")
+    global mic_process 
     try:
         payload = json.loads(msg.payload.decode())
         command = payload.get("command")
@@ -324,7 +325,35 @@ def on_message(client, userdata, msg):
                     "message": f"Failed to set speaker(s): {str(e)}"
                 }))
 
+        elif command == "micstart":
+            try:
+                    # If already running, stop it first
+                    if mic_process and mic_process.poll() is None:
+                        print("?? micstart received, but process already running. Restarting...")
+                        mic_process.terminate()
 
+                    # Start the subprocess
+                    mic_process = subprocess.Popen(
+                        ["python3", "/home/satheesh/jothibell01/webplay.py"],
+                        stdout=subprocess.PIPE,
+                        stderr=subprocess.PIPE
+                    )
+                    print("?? Microphone streaming started (webplay.py)")
+            except Exception as e:
+                print(f"? Failed to start mic streaming: {e}")
+
+        elif command == "micstop":
+            try:
+                if mic_process and mic_process.poll() is None:
+                    mic_process.terminate()
+                    mic_process.wait()
+                    mic_process = None
+                    print("?? Microphone streaming stopped")
+                else:
+                    print("?? micstop received, but process not running")
+            except Exception as e:
+                print(f"? Failed to stop mic streaming: {e}")
+                
                
         elif command == "stop":
             print("â¹ï¸ Stop command received via MQTT")
