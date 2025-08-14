@@ -47,3 +47,10 @@ sample_data = {
  }
  
 }
+
+#installation
+pip install pyaudio --break-system-packages
+pip install flask-socketio --break-system-packages
+pip install websocket-client --break-system-packages
+pip install websocket-client --break-system-packages
+pip install pydub --break-system-packages
