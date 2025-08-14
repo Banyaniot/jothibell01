@@ -139,7 +139,7 @@ def send_relay_command(speaker_zone, label=""):
     else:
         zones = []
 
-    relay_states = [0] * 8
+    relay_states = [0] * 16
     print("Selected zones:", zones)
 
     zone_map = {
@@ -150,15 +150,23 @@ def send_relay_command(speaker_zone, label=""):
         "classroom5": 4,
         "classroom6": 5,
         "classroom7": 6,
-        "classroom8": 7
+        "classroom8": 7,
+        "classroom9": 8,
+        "classroom10": 9,
+        "classroom11": 10,
+        "classroom12": 11,
+        "classroom13": 12,
+        "classroom14": 13,
+        "classroom15": 14,
+        "classroom16": 15
     }
 
     for zone in zones:
         if zone == "all":
-            relay_states = [1] * 8
+            relay_states = [1] * 16
             break
         elif zone == "off":
-            relay_states = [0] * 8
+            relay_states = [0] * 16
             break
         elif zone in zone_map:
             relay_states[zone_map[zone]] = 1
@@ -174,6 +182,7 @@ def send_relay_command(speaker_zone, label=""):
     ser.write((json_data + "\n").encode())
     print("[UART SEND]", json_data)
     update_speaker_zone(",".join(zones), label)
+
 
 # Background thread to send every 10 sec
 def update_speaker_zone(zone, label):
